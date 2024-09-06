@@ -25,14 +25,6 @@ jobs:
           registry: ghcr.io
           username: ${{ secrets.MY_GITHUB_USERNAME }}
           password: ${{ secrets.MY_GITHUB_TOKEN }}
-      - name: Create package if not exists
-        run: |
-          echo "Creating package if it doesn't exist"
-          curl -X POST \
-            -H "Authorization: Bearer ${{ secrets.MY_GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            https://api.github.com/user/packages \
-            -d '{"name":"laravel-react-docker","visibility":"public"}'
       - name: Build and push Laravel Docker image
         uses: docker/build-push-action@v4
         with:
@@ -46,6 +38,7 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: ./react-frontend
+          file: ./react-frontend/Dockerfile
           push: true
           tags: ghcr.io/${{ env.REPO_NAME }}/react:${{ github.sha }}
           cache-from: type=registry,ref=ghcr.io/${{ env.REPO_NAME }}/react:latest

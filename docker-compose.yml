@@ -12,11 +12,11 @@ services:
       - react
 
   laravel:
-    image: ghcr.io/${{ github.repository }}/laravel:${{ github.sha }}
+    image: ${LARAVEL_IMAGE}
     ports:
       - "8000:8000"
 
   react:
-    image: ghcr.io/${{ github.repository }}/react:${{ github.sha }}
+    image: ${REACT_IMAGE}
     ports:
       - "3000:3000"

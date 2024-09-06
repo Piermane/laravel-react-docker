@@ -61,28 +61,25 @@ jobs:
         id: deploy
         uses: appleboy/ssh-action@master
         env:
-          REPO_NAME: ${{ env.REPO_NAME }}
-          GITHUB_SHA: ${{ github.sha }}
+          LARAVEL_IMAGE: ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}-laravel
+          REACT_IMAGE: ghcr.io/${{ env.REPO_NAME }}/react:${{ github.sha }}-react
           RUN_MIGRATIONS: ${{ github.event.inputs.run_migrations }}
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
-          envs: REPO_NAME,GITHUB_SHA,RUN_MIGRATIONS
+          envs: LARAVEL_IMAGE,REACT_IMAGE,RUN_MIGRATIONS
           script: |
             cd /root/laravel-react-docker
             echo "${{ secrets.MY_GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ secrets.MY_GITHUB_USERNAME }} --password-stdin
-            docker pull ghcr.io/$REPO_NAME/laravel:$GITHUB_SHA-laravel
-            docker pull ghcr.io/$REPO_NAME/react:$GITHUB_SHA-react
+            docker pull $LARAVEL_IMAGE
+            docker pull $REACT_IMAGE
             docker-compose down
-            sed -i "s|image: ghcr.io/\${{ github.repository }}/laravel:\${{ github.sha }}|image: ghcr.io/$REPO_NAME/laravel:$GITHUB_SHA-laravel|" docker-compose.yml
-            sed -i "s|image: ghcr.io/\${{ github.repository }}/react:\${{ github.sha }}|image: ghcr.io/$REPO_NAME/react:$GITHUB_SHA-react|" docker-compose.yml
-
             docker-compose up -d
 
             if [ ! -f .env ]; then
               echo "Создание нового .env файла..."
-              docker run --rm ghcr.io/$REPO_NAME/laravel:$GITHUB_SHA-laravel cat .env.example > .env
+              docker run --rm $LARAVEL_IMAGE cat .env.example > .env
               docker-compose exec -T laravel php artisan key:generate
               docker-compose exec -T laravel php artisan config:cache
             else
@@ -95,10 +92,6 @@ jobs:
             else
               echo "Пропуск миграций."
             fi
-
-            # Получение версий и сохранение в файл
-            docker-compose exec -T laravel php artisan --version | awk '{print $3}' > laravel_version.txt
-            docker-compose exec -T react node --version > node_version.txt
 
       - name: Send Telegram Notification
         if: always()
@@ -114,8 +107,4 @@ jobs:
             <b>Branch:</b> ${{ github.ref }}
             <b>Commit:</b> ${{ github.sha }}
             <b>Deployed by:</b> ${{ github.actor }}
-
-
             <b>Target Server:</b> ${{ secrets.SERVER_IP }}
-
-

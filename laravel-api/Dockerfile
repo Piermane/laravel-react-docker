@@ -25,7 +25,7 @@ WORKDIR /var/www
 # Копирование файлов проекта
 COPY . /var/www
 
-# Установка зависимостей
+# Установка или создание проекта Laravel
 RUN if [ -f "composer.json" ]; then \
         composer install --no-interaction --prefer-dist --optimize-autoloader; \
     else \

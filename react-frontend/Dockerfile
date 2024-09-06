@@ -3,31 +3,16 @@ FROM node:18-alpine
 # Установка рабочей директории
 WORKDIR /app
 
-# Копирование файлов проекта
-COPY ./react-frontend .
+# Копируем все файлы проекта, включая package.json и папку src
+COPY ./react-frontend /app
 
-# Проверка наличия package.json и установка зависимостей
+# Устанавливаем зависимости и собираем проект
 RUN if [ -f package.json ]; then \
-        npm install; \
-        if grep -q '"build"' package.json; then \
-            npm run build; \
-        fi; \
+        npm install && npm run build; \
     else \
-        echo "package.json not found. Skipping npm install and build."; \
+        echo "package.json не найден. Пропускаем установку."; \
     fi
 
-# Открытие порта 3000
+# Открываем порт и запускаем приложение
 EXPOSE 3000
-
-# Запуск приложения или вывод сообщения об ошибке
-CMD if [ -f package.json ]; then \
-        if grep -q '"start"' package.json; then \
-            npm start; \
-        else \
-            echo "No start script found in package.json"; \
-            exit 1; \
-        fi; \
-    else \
-        echo "No package.json found. Cannot start the application."; \
-        exit 1; \
-    fi
+CMD ["npm", "start"]

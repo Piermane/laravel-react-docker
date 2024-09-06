@@ -11,21 +11,12 @@ services:
       - react
 
   laravel:
-    build:
-      context: ./laravel-api
-      dockerfile: Dockerfile
-    volumes:
-      - ./laravel-api/app:/var/www/app
-      - ./laravel-api/routes:/var/www/routes
+    image: ghcr.io/${{ github.repository }}/laravel:${{ github.sha }}
     ports:
       - "8000:8000"
 
   react:
-    build:
-      context: ./react-frontend
-      dockerfile: Dockerfile
-    volumes:
-      - ./react-frontend/src:/app/src
+    image: ghcr.io/${{ github.repository }}/react:${{ github.sha }}
     ports:
       - "3000:3000"
 

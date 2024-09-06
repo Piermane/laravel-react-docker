@@ -14,29 +14,20 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Get deploy start time
-        id: deploy_start
-        run: echo "::set-output name=time::$(date)"
-      - name: Get deploy end time
-        id: deploy_end
-        run: echo "::set-output name=time::$(date)"
-      - name: Get Laravel Version
-        run: |
-          echo "LARAVEL_VERSION=$(docker-compose exec laravel php artisan --version | awk '{print $3}')" >> $GITHUB_ENV
-      - name: Get Node.js Version
-        run: |
-          echo "NODE_VERSION=$(docker-compose exec react node --version)" >> $GITHUB_ENV
       - name: Checkout code
         uses: actions/checkout@v3
+
       - name: Set repository name to lowercase
         id: vars
         run: echo "REPO_NAME=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:
           registry: ghcr.io
           username: ${{ secrets.MY_GITHUB_USERNAME }}
           password: ${{ secrets.MY_GITHUB_TOKEN }}
+
       - name: Build and push Laravel Docker image
         uses: docker/build-push-action@v4
         with:
@@ -44,9 +35,9 @@ jobs:
           file: ./laravel-api/Dockerfile
           push: true
           tags: ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}-laravel
-          #cache-from: type=registry,ref=ghcr.io/${{ env.REPO_NAME }}/laravel:latest
           cache-to: type=inline
           no-cache: true
+
       - name: Build and push React Docker image
         uses: docker/build-push-action@v4
         with:
@@ -54,9 +45,9 @@ jobs:
           file: ./react-frontend/Dockerfile
           push: true
           tags: ghcr.io/${{ env.REPO_NAME }}/react:${{ github.sha }}-react
-          #cache-from: type=registry,ref=ghcr.io/${{ env.REPO_NAME }}/react:latest
           cache-to: type=inline
           no-cache: true
+
       - name: Copy files to server
         uses: appleboy/scp-action@master
         with:
@@ -65,6 +56,7 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           source: "docker-compose.yml,nginx.conf"
           target: "/root/laravel-react-docker"
+
       - name: Deploy to Server
         uses: appleboy/ssh-action@master
         env:
@@ -79,52 +71,63 @@ jobs:
           script: |
             cd /root/laravel-react-docker
             echo "${{ secrets.MY_GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ secrets.MY_GITHUB_USERNAME }} --password-stdin
-            docker pull ghcr.io/$REPO_NAME/laravel:$GITHUB_SHA
-            docker pull ghcr.io/$REPO_NAME/react:$GITHUB_SHA
+            docker pull ghcr.io/$REPO_NAME/laravel:$GITHUB_SHA-laravel
+            docker pull ghcr.io/$REPO_NAME/react:$GITHUB_SHA-react
             docker-compose down
-            sed -i "s|image: .*laravel.*|image: ghcr.io/$REPO_NAME/laravel:$GITHUB_SHA|" docker-compose.yml
-            sed -i "s|image: .*react.*|image: ghcr.io/$REPO_NAME/react:$GITHUB_SHA|" docker-compose.yml
-            
+            sed -i "s|image: .*laravel.*|image: ghcr.io/$REPO_NAME/laravel:$GITHUB_SHA-laravel|" docker-compose.yml
+            sed -i "s|image: .*react.*|image: ghcr.io/$REPO_NAME/react:$GITHUB_SHA-react|" docker-compose.yml
+            docker-compose up -d
+
             # Проверка существования .env файла
             if [ ! -f .env ]; then
               echo "Создание нового .env файла..."
-              docker run --rm ghcr.io/$REPO_NAME/laravel:$GITHUB_SHA cp .env.example .env
+              docker run --rm ghcr.io/$REPO_NAME/laravel:$GITHUB_SHA-laravel cp .env.example .env
               docker-compose up -d
-              docker-compose exec laravel php artisan key:generate
-              docker-compose exec laravel php artisan config:cache
+              docker-compose exec -T laravel php artisan key:generate
+              docker-compose exec -T laravel php artisan config:cache
             else
               echo "Обновление существующего проекта..."
-              docker-compose up -d
             fi
             
             # Запуск миграций, если указано
             if [ "$RUN_MIGRATIONS" = "true" ]; then
               echo "Запуск миграций..."
-              docker-compose exec laravel php artisan migrate --force
+              docker-compose exec -T laravel php artisan migrate --force
             else
               echo "Пропуск миграций."
             fi
+
+            # Получение версий Laravel и Node.js
+            LARAVEL_VERSION=$(docker-compose exec -T laravel php artisan --version | awk '{print $3}')
+            NODE_VERSION=$(docker-compose exec -T react node --version)
+            echo "LARAVEL_VERSION=$LARAVEL_VERSION" >> $GITHUB_ENV
+            echo "NODE_VERSION=$NODE_VERSION" >> $GITHUB_ENV
+
+      - name: Get deploy time
+        id: deploy_time
+        run: echo "time=$(date -d '+3 hours' '+%Y-%m-%d %H:%M:%S %Z')" >> $GITHUB_OUTPUT
+
       - name: Send Telegram Notification
         uses: appleboy/telegram-action@master
         with:
           to: ${{ secrets.TELEGRAM_CHAT_ID }}
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          format: html
           message: |
-            🟢**Deployment finished!**
-            **Status:** ${{ job.status }}
-            **Project:** ${{ github.repository }}
-            **Branch:** ${{ github.ref }}
-            **Commit:** ${{ github.sha }}
-            **Deployed by:** ${{ github.actor }}
+            <b>🟢 Deployment finished!</b>
+            <b>Status:</b> ${{ job.status }}
+            <b>Project:</b> ${{ github.repository }}
+            <b>Branch:</b> ${{ github.ref }}
+            <b>Commit:</b> ${{ github.sha }}
+            <b>Deployed by:</b> ${{ github.actor }}
 
-            **Migrations run:** ${{ github.event.inputs.run_migrations }}
-            **Target Server:** ${{ secrets.SERVER_IP }}
-            **Updated Services:** Laravel, React
+            <b>Migrations run:</b> ${{ github.event.inputs.run_migrations }}
+            <b>Target Server:</b> ${{ secrets.SERVER_IP }}
+            <b>Updated Services:</b> Laravel, React
 
-            **Start time:** ${{ steps.deploy_start.outputs.time }}
-            **End time:** ${{ steps.deploy_end.outputs.time }}
+            <b>Deploy time:</b> ${{ steps.deploy_time.outputs.time }}
 
-            **Laravel Version:** ${{ env.LARAVEL_VERSION }}
-            **Node.js Version:** ${{ env.NODE_VERSION }}
+            <b>Laravel Version:</b> ${{ env.LARAVEL_VERSION }}
+            <b>Node.js Version:</b> ${{ env.NODE_VERSION }}
 
-            **Environment:** test
+            <b>Environment:</b> test

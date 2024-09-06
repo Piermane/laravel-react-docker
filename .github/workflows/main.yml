@@ -94,37 +94,25 @@ jobs:
               echo "Пропуск миграций."
             fi
 
-            # Сохранение версий в файл
-            docker-compose exec -T laravel php artisan --version | awk '{print $3}' > laravel_version.txt
-            docker-compose exec -T react node --version > node_version.txt
-
-      - name: Get versions
-        uses: appleboy/scp-action@master
-        with:
-          host: ${{ secrets.SERVER_IP }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          source: "/root/laravel-react-docker/laravel_version.txt,/root/laravel-react-docker/node_version.txt"
-          target: "versions"
-          strip_components: 3
-
-      - name: Set versions as env variables
-        run: |
-          echo "LARAVEL_VERSION=$(cat versions/laravel_version.txt)" >> $GITHUB_ENV
-          echo "NODE_VERSION=$(cat versions/node_version.txt)" >> $GITHUB_ENV
+            # Получение версий
+            LARAVEL_VERSION=$(docker-compose exec -T laravel php artisan --version | awk '{print $3}')
+            NODE_VERSION=$(docker-compose exec -T react node --version)
+            echo "LARAVEL_VERSION=$LARAVEL_VERSION" >> $GITHUB_ENV
+            echo "NODE_VERSION=$NODE_VERSION" >> $GITHUB_ENV
 
       - name: Get deploy time
         id: deploy_time
         run: echo "time=$(date -d '+3 hours' '+%Y-%m-%d %H:%M:%S %Z')" >> $GITHUB_OUTPUT
 
       - name: Send Telegram Notification
+        if: always()
         uses: appleboy/telegram-action@master
         with:
           to: ${{ secrets.TELEGRAM_CHAT_ID }}
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           format: html
           message: |
-            <b>🟢 Deployment finished!</b>
+            ${{ job.status == 'success' && '🟢' || '🔴' }} <b>Deployment ${{ job.status == 'success' && 'finished' || 'failed' }}!</b>
             <b>Status:</b> ${{ job.status }}
             <b>Project:</b> ${{ github.repository }}
             <b>Branch:</b> ${{ github.ref }}
@@ -137,18 +125,5 @@ jobs:
 
             <b>Deploy time:</b> ${{ steps.deploy_time.outputs.time }}
 
-            <b>Laravel Version:</b> ${{ env.LARAVEL_VERSION }}
-            <b>Node.js Version:</b> ${{ env.NODE_VERSION }}
-
-            <b>Environment:</b> test
-
-            <b>Migrations run:</b> ${{ github.event.inputs.run_migrations }}
-            <b>Target Server:</b> ${{ secrets.SERVER_IP }}
-            <b>Updated Services:</b> Laravel, React
-
-            <b>Deploy time:</b> ${{ steps.deploy_time.outputs.time }}
-
-            <b>Laravel Version:</b> ${{ steps.get_versions.outputs.LARAVEL_VERSION }}
-            <b>Node.js Version:</b> ${{ steps.get_versions.outputs.NODE_VERSION }}
-
-            <b>Environment:</b> test
+            ${{ job.status == 'success' && format('<b>Laravel Version:</b> {0}', env.LARAVEL_VERSION) || '' }}
+            ${{ job.status == 'success' && format('<b>Node.js Version:</b> {0}', env.NODE_VERSION) || '' }}

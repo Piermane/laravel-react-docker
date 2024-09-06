@@ -1,7 +1,8 @@
-version: '3'
+version: '3.8'
+
 services:
   nginx:
-    image: nginx:latest
+    image: nginx:stable-alpine
     ports:
       - "80:80"
     volumes:
@@ -19,7 +20,3 @@ services:
     image: ghcr.io/${{ github.repository }}/react:${{ github.sha }}
     ports:
       - "3000:3000"
-
-networks:
-  default:
-    driver: bridge

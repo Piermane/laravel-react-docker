@@ -1,6 +1,6 @@
-FROM php:8.1-fpm
+FROM php:8.2-fpm
 
-# Установка зависимостей
+# Установка системных зависимостей
 RUN apt-get update && apt-get install -y \
     git \
     curl \
@@ -8,26 +8,33 @@ RUN apt-get update && apt-get install -y \
     libonig-dev \
     libxml2-dev \
     zip \
-    unzip \
-    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    unzip
 
-# Установка Composer
+# Очистка кеша
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Установка расширений PHP
+RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
+
+# Получение последней версии Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
+# Установка рабочей директории
 WORKDIR /var/www
 
-# Инициализация Laravel проекта
-RUN composer create-project --prefer-dist laravel/laravel .
+# Копирование файлов проекта
+COPY . /var/www
 
-# Копирование наших модифицированных файлов
-COPY ./app/Http/Controllers/TaskController.php /var/www/app/Http/Controllers/
-COPY ./routes/api.php /var/www/routes/
+# Установка зависимостей
+RUN if [ -f "composer.json" ]; then \
+        composer install --no-interaction --prefer-dist --optimize-autoloader; \
+    else \
+        composer create-project --prefer-dist laravel/laravel .; \
+    fi
 
-# Настройка прав доступа
+# Установка прав доступа
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
 
+# Открытие порта 9000 и запуск php-fpm сервера
 EXPOSE 9000
-
 CMD ["php-fpm"]

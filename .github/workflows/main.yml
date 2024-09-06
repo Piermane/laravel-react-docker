@@ -75,8 +75,9 @@ jobs:
             docker pull ghcr.io/$REPO_NAME/laravel:$GITHUB_SHA-laravel
             docker pull ghcr.io/$REPO_NAME/react:$GITHUB_SHA-react
             docker-compose down
-            sed -i "s|image: .*laravel.*|image: ghcr.io/$REPO_NAME/laravel:$GITHUB_SHA-laravel|" docker-compose.yml
-            sed -i "s|image: .*react.*|image: ghcr.io/$REPO_NAME/react:$GITHUB_SHA-react|" docker-compose.yml
+            sed -i "s|image: ghcr.io/[^ ]*/laravel:.*|image: ghcr.io/$REPO_NAME/laravel:$GITHUB_SHA-laravel|" docker-compose.yml
+            sed -i "s|image: ghcr.io/[^ ]*/react:.*|image: ghcr.io/$REPO_NAME/react:$GITHUB_SHA-react|" docker-compose.yml
+
             docker-compose up -d
 
             if [ ! -f .env ]; then
@@ -99,12 +100,6 @@ jobs:
             docker-compose exec -T laravel php artisan --version | awk '{print $3}' > laravel_version.txt
             docker-compose exec -T react node --version > node_version.txt
 
-      - name: Get versions
-        if: success()
-        run: |
-          echo "LARAVEL_VERSION=$(cat laravel_version.txt)" >> $GITHUB_ENV
-          echo "NODE_VERSION=$(cat node_version.txt)" >> $GITHUB_ENV
-
       - name: Send Telegram Notification
         if: always()
         uses: appleboy/telegram-action@master
@@ -120,13 +115,9 @@ jobs:
             <b>Commit:</b> ${{ github.sha }}
             <b>Deployed by:</b> ${{ github.actor }}
 
-            <b>Migrations run:</b> ${{ github.event.inputs.run_migrations }}
+
             <b>Target Server:</b> ${{ secrets.SERVER_IP }}
             <b>Updated Services:</b> Laravel, React
 
-            <b>Deploy time:</b> ${{ steps.deploy_time.outputs.time }}
+            <b>Deploy time:</b> {{ steps.deploy.outputs.time | timezone: 'Europe/Moscow' }}
 
-            ${{ job.status == 'success' && format('<b>Laravel Version:</b> {0}', env.LARAVEL_VERSION) || '' }}
-            ${{ job.status == 'success' && format('<b>Node.js Version:</b> {0}', env.NODE_VERSION) || '' }}
-
-            <b>Environment:</b> test

@@ -34,6 +34,7 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: ./laravel-api
+          file: ./laravel-api/Dockerfile
           push: true
           tags: ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}
           cache-from: type=registry,ref=ghcr.io/${{ env.REPO_NAME }}/laravel:latest

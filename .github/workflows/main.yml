@@ -31,7 +31,7 @@ jobs:
           context: ./laravel-api
           file: ./laravel-api/Dockerfile
           push: true
-          tags: ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}
+          tags: ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}-laravel
           cache-from: type=registry,ref=ghcr.io/${{ env.REPO_NAME }}/laravel:latest
           cache-to: type=inline
       - name: Build and push React Docker image
@@ -40,7 +40,7 @@ jobs:
           context: ./react-frontend
           file: ./react-frontend/Dockerfile
           push: true
-          tags: ghcr.io/${{ env.REPO_NAME }}/react:${{ github.sha }}
+          tags: ghcr.io/${{ env.REPO_NAME }}/react:${{ github.sha }}-react
           cache-from: type=registry,ref=ghcr.io/${{ env.REPO_NAME }}/react:latest
           cache-to: type=inline
       - name: Copy files to server

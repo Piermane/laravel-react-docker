@@ -77,33 +77,25 @@ jobs:
             sed -i "s|image: .*laravel.*|image: ghcr.io/$REPO_NAME/laravel:$GITHUB_SHA|" docker-compose.yml
             sed -i "s|image: .*react.*|image: ghcr.io/$REPO_NAME/react:$GITHUB_SHA|" docker-compose.yml
             
-            # Проверка наличия .env файла
+            # Проверка существования .env файла
             if [ ! -f .env ]; then
-              echo "Initializing new project..."
-              touch .env
+              echo "Создание нового .env файла..."
+              docker run --rm ghcr.io/$REPO_NAME/laravel:$GITHUB_SHA cp .env.example .env
               docker-compose up -d
-              docker exec laravel-container php artisan key:generate
-              docker exec laravel-container php artisan config:cache
+              docker-compose exec laravel php artisan key:generate
+              docker-compose exec laravel php artisan config:cache
             else
-              echo "Updating existing project..."
+              echo "Обновление существующего проекта..."
               docker-compose up -d
             fi
             
-            # Обновление зависимостей Laravel
-            docker exec laravel-container composer install --no-interaction --prefer-dist --optimize-autoloader
-            
-            # Запуск миграций, если переменная окружения установлена
+            # Запуск миграций, если указано
             if [ "$RUN_MIGRATIONS" = "true" ]; then
-              echo "Running migrations..."
-              docker exec -i laravel-container php artisan migrate --force
+              echo "Запуск миграций..."
+              docker-compose exec laravel php artisan migrate --force
             else
-              echo "Skipping migrations."
+              echo "Пропуск миграций."
             fi
-            
-            # Настройка React
-            echo "Building React app..."
-            docker exec react-container npm ci
-            docker exec react-container npm run build
 
       - name: Send Telegram Notification
         uses: appleboy/telegram-action@master

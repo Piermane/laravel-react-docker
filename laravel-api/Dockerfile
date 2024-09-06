@@ -23,7 +23,7 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 WORKDIR /var/www/html
 
 # Копирование файлов проекта
-COPY ./laravel-api /var/www/html
+COPY . /var/www/html
 
 # Установка зависимостей или создание нового проекта
 RUN if [ -f "composer.json" ]; then \

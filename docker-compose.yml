@@ -14,12 +14,10 @@ services:
     image: ghcr.io/${{ github.repository }}/laravel:${{ github.sha }}
     ports:
       - "8000:8000"
+    depends_on:
+      - react
 
   react:
     image: ghcr.io/${{ github.repository }}/react:${{ github.sha }}
     ports:
       - "3000:3000"
-
-networks:
-  default:
-    driver: bridge

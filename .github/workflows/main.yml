@@ -14,6 +14,12 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Get deploy start time
+        id: deploy_start
+        run: echo "time=$(date)" >> $GITHUB_ENV
+      - name: Get deploy end time
+        id: deploy_end
+        run: echo "time=$(date)" >> $GITHUB_ENV
       - name: Checkout code
         uses: actions/checkout@v3
       - name: Set repository name to lowercase
@@ -96,6 +102,18 @@ jobs:
           to: ${{ secrets.TELEGRAM_CHAT_ID }}
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           message: |
-            Deployment finished.
+            Deployment finished!
             Status: ${{ job.status }}
+            Project: ${{ github.repository }}
+            Branch: ${{ github.ref }}
+            Commit: ${{ github.sha }}
+            Deployed by: ${{ github.actor }}
             Migrations run: ${{ github.event.inputs.run_migrations }}
+            Target Server: ${{ secrets.SERVER_IP }}
+            Updated Services: Laravel, React
+            Start time: ${{ steps.deploy_start.outputs.time }}
+            End time: ${{ steps.deploy_end.outputs.time }}
+            Laravel Version: 8.x
+            Node.js Version: 18.x
+            Environment: test
+

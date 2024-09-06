@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y \
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Установка расширений PHP
-RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
+RUN docker-php-ext-install pdo pdo_mysql mbstring exif pcntl bcmath gd
 
 # Получение последней версии Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -22,17 +22,17 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # Установка рабочей директории
 WORKDIR /var/www/html
 
-# Копирование файлов проекта
-COPY . /var/www/html
+# Копирование composer.json и composer.lock (если есть)
+COPY composer*.json composer*.lock ./
 
-# Установка зависимостей или создание нового проекта
-RUN if [ -f "composer.json" ]; then \
-        composer install --no-interaction --prefer-dist --optimize-autoloader; \
-    else \
-        rm -rf * .[!.]* ..?* && \
-        composer create-project --prefer-dist laravel/laravel . && \
-        composer install --no-interaction --prefer-dist --optimize-autoloader; \
-    fi
+# Установка зависимостей
+RUN composer install --no-scripts --no-autoloader
+
+# Копирование остальных файлов проекта
+COPY . .
+
+# Генерация автозагрузчика и выполнение скриптов
+RUN composer dump-autoload --optimize && composer run-script post-autoload-dump
 
 # Установка прав доступа
 RUN chown -R www-data:www-data storage bootstrap/cache

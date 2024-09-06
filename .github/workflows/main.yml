@@ -58,6 +58,7 @@ jobs:
           target: "/root/laravel-react-docker"
 
       - name: Deploy to Server
+        id: deploy
         uses: appleboy/ssh-action@master
         env:
           REPO_NAME: ${{ env.REPO_NAME }}
@@ -94,15 +95,15 @@ jobs:
               echo "Пропуск миграций."
             fi
 
-            # Получение версий
-            LARAVEL_VERSION=$(docker-compose exec -T laravel php artisan --version | awk '{print $3}')
-            NODE_VERSION=$(docker-compose exec -T react node --version)
-            echo "LARAVEL_VERSION=$LARAVEL_VERSION" >> $GITHUB_ENV
-            echo "NODE_VERSION=$NODE_VERSION" >> $GITHUB_ENV
+            # Получение версий и сохранение в файл
+            docker-compose exec -T laravel php artisan --version | awk '{print $3}' > laravel_version.txt
+            docker-compose exec -T react node --version > node_version.txt
 
-      - name: Get deploy time
-        id: deploy_time
-        run: echo "time=$(date -d '+3 hours' '+%Y-%m-%d %H:%M:%S %Z')" >> $GITHUB_OUTPUT
+      - name: Get versions
+        if: success()
+        run: |
+          echo "LARAVEL_VERSION=$(cat laravel_version.txt)" >> $GITHUB_ENV
+          echo "NODE_VERSION=$(cat node_version.txt)" >> $GITHUB_ENV
 
       - name: Send Telegram Notification
         if: always()
@@ -127,3 +128,5 @@ jobs:
 
             ${{ job.status == 'success' && format('<b>Laravel Version:</b> {0}', env.LARAVEL_VERSION) || '' }}
             ${{ job.status == 'success' && format('<b>Node.js Version:</b> {0}', env.NODE_VERSION) || '' }}
+
+            <b>Environment:</b> test

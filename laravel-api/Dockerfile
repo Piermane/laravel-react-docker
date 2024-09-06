@@ -29,7 +29,9 @@ COPY . /var/www/html
 RUN if [ -f "composer.json" ]; then \
         composer install --no-interaction --prefer-dist --optimize-autoloader; \
     else \
-        composer create-project --prefer-dist laravel/laravel .; \
+        rm -rf * .[!.]* ..?* && \
+        composer create-project --prefer-dist laravel/laravel . && \
+        composer install --no-interaction --prefer-dist --optimize-autoloader; \
     fi
 
 # Установка прав доступа

@@ -1,5 +1,4 @@
 name: CI/CD
-
 on:
   push:
     branches:
@@ -11,25 +10,29 @@ on:
         required: true
         type: boolean
         default: false
-
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-
       - name: Set repository name to lowercase
         id: vars
         run: echo "REPO_NAME=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
-
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
+          username: ${{ secrets.MY_GITHUB_USERNAME }}
+          password: ${{ secrets.MY_GITHUB_TOKEN }}
+      - name: Create package if not exists
+        run: |
+          echo "Creating package if it doesn't exist"
+          curl -X POST \
+            -H "Authorization: Bearer ${{ secrets.MY_GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/user/packages \
+            -d '{"name":"laravel-react-docker","visibility":"public"}'
       - name: Build and push Laravel Docker image
         uses: docker/build-push-action@v4
         with:
@@ -39,7 +42,6 @@ jobs:
           tags: ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}
           cache-from: type=registry,ref=ghcr.io/${{ env.REPO_NAME }}/laravel:latest
           cache-to: type=inline
-
       - name: Build and push React Docker image
         uses: docker/build-push-action@v4
         with:
@@ -48,7 +50,6 @@ jobs:
           tags: ghcr.io/${{ env.REPO_NAME }}/react:${{ github.sha }}
           cache-from: type=registry,ref=ghcr.io/${{ env.REPO_NAME }}/react:latest
           cache-to: type=inline
-
       - name: Copy files to server
         uses: appleboy/scp-action@master
         with:
@@ -57,7 +58,6 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           source: "docker-compose.yml,nginx.conf"
           target: "/root/laravel-react-docker"
-
       - name: Deploy to Server
         uses: appleboy/ssh-action@master
         env:
@@ -71,7 +71,7 @@ jobs:
           envs: REPO_NAME,GITHUB_SHA,RUN_MIGRATIONS
           script: |
             cd /root/laravel-react-docker
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            echo "${{ secrets.MY_GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ secrets.MY_GITHUB_USERNAME }} --password-stdin
             docker pull ghcr.io/$REPO_NAME/laravel:$GITHUB_SHA
             docker pull ghcr.io/$REPO_NAME/react:$GITHUB_SHA
             docker-compose down
@@ -97,7 +97,6 @@ jobs:
             else
               echo "Пропуск миграций."
             fi
-
       - name: Send Telegram Notification
         uses: appleboy/telegram-action@master
         with:

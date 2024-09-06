@@ -20,12 +20,12 @@ RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # Установка рабочей директории
-WORKDIR /var/www
+WORKDIR /var/www/html
 
 # Копирование файлов проекта
-COPY . /var/www
+COPY ./laravel-api /var/www/html
 
-# Установка или создание проекта Laravel
+# Установка зависимостей или создание нового проекта
 RUN if [ -f "composer.json" ]; then \
         composer install --no-interaction --prefer-dist --optimize-autoloader; \
     else \
@@ -33,7 +33,7 @@ RUN if [ -f "composer.json" ]; then \
     fi
 
 # Установка прав доступа
-RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
+RUN chown -R www-data:www-data storage bootstrap/cache
 
 # Открытие порта 9000 и запуск php-fpm сервера
 EXPOSE 9000

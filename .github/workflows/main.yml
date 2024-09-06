@@ -94,18 +94,24 @@ jobs:
               echo "Пропуск миграций."
             fi
 
-            echo "LARAVEL_VERSION=$(docker-compose exec -T laravel php artisan --version | awk '{print $3}')" >> versions.env
-            echo "NODE_VERSION=$(docker-compose exec -T react node --version)" >> versions.env
+            # Сохранение версий в файл
+            docker-compose exec -T laravel php artisan --version | awk '{print $3}' > laravel_version.txt
+            docker-compose exec -T react node --version > node_version.txt
 
       - name: Get versions
-        uses: appleboy/ssh-action@master
+        uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
-          script: |
-            cd /root/laravel-react-docker
-            cat versions.env >> $GITHUB_OUTPUT
+          source: "/root/laravel-react-docker/laravel_version.txt,/root/laravel-react-docker/node_version.txt"
+          target: "versions"
+          strip_components: 3
+
+      - name: Set versions as env variables
+        run: |
+          echo "LARAVEL_VERSION=$(cat versions/laravel_version.txt)" >> $GITHUB_ENV
+          echo "NODE_VERSION=$(cat versions/node_version.txt)" >> $GITHUB_ENV
 
       - name: Get deploy time
         id: deploy_time
@@ -124,6 +130,17 @@ jobs:
             <b>Branch:</b> ${{ github.ref }}
             <b>Commit:</b> ${{ github.sha }}
             <b>Deployed by:</b> ${{ github.actor }}
+
+            <b>Migrations run:</b> ${{ github.event.inputs.run_migrations }}
+            <b>Target Server:</b> ${{ secrets.SERVER_IP }}
+            <b>Updated Services:</b> Laravel, React
+
+            <b>Deploy time:</b> ${{ steps.deploy_time.outputs.time }}
+
+            <b>Laravel Version:</b> ${{ env.LARAVEL_VERSION }}
+            <b>Node.js Version:</b> ${{ env.NODE_VERSION }}
+
+            <b>Environment:</b> test
 
             <b>Migrations run:</b> ${{ github.event.inputs.run_migrations }}
             <b>Target Server:</b> ${{ secrets.SERVER_IP }}

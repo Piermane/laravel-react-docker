@@ -89,9 +89,6 @@ jobs:
               docker-compose up -d
             fi
             
-            # Обновление зависимостей Laravel
-            docker exec laravel-container composer install --no-interaction --prefer-dist --optimize-autoloader
-            
             # Запуск миграций, если переменная окружения установлена
             if [ "$RUN_MIGRATIONS" = "true" ]; then
               echo "Running migrations..."
@@ -99,11 +96,6 @@ jobs:
             else
               echo "Skipping migrations."
             fi
-            
-            # Настройка React
-            echo "Building React app..."
-            docker exec react-container npm ci
-            docker exec react-container npm run build
 
       - name: Send Telegram Notification
         uses: appleboy/telegram-action@master

@@ -22,17 +22,17 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # Установка рабочей директории
 WORKDIR /var/www/html
 
-# Копирование composer.json и composer.lock (если есть)
-COPY composer*.json composer*.lock ./
+# Копирование файлов проекта
+COPY . /var/www/html
 
-# Установка зависимостей
-RUN composer install --no-scripts --no-autoloader
-
-# Копирование остальных файлов проекта
-COPY . .
-
-# Генерация автозагрузчика и выполнение скриптов
-RUN composer dump-autoload --optimize && composer run-script post-autoload-dump
+# Установка зависимостей или создание нового проекта
+RUN if [ -f "composer.json" ]; then \
+        composer install --no-interaction --prefer-dist --optimize-autoloader; \
+    else \
+        rm -rf * .[!.]* ..?* && \
+        composer create-project --prefer-dist laravel/laravel . && \
+        composer install --no-interaction --prefer-dist --optimize-autoloader; \
+    fi
 
 # Установка прав доступа
 RUN chown -R www-data:www-data storage bootstrap/cache

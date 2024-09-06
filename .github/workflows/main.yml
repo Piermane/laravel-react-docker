@@ -75,8 +75,8 @@ jobs:
             docker pull ghcr.io/$REPO_NAME/laravel:$GITHUB_SHA-laravel
             docker pull ghcr.io/$REPO_NAME/react:$GITHUB_SHA-react
             docker-compose down
-            sed -i "s|image: ghcr.io/[^ ]*/laravel:.*|image: ghcr.io/$REPO_NAME/laravel:$GITHUB_SHA-laravel|" docker-compose.yml
-            sed -i "s|image: ghcr.io/[^ ]*/react:.*|image: ghcr.io/$REPO_NAME/react:$GITHUB_SHA-react|" docker-compose.yml
+            sed -i "s|image: ghcr.io/\${{ github.repository }}/laravel:\${{ github.sha }}|image: ghcr.io/$REPO_NAME/laravel:$GITHUB_SHA-laravel|" docker-compose.yml
+            sed -i "s|image: ghcr.io/\${{ github.repository }}/react:\${{ github.sha }}|image: ghcr.io/$REPO_NAME/react:$GITHUB_SHA-react|" docker-compose.yml
 
             docker-compose up -d
 
@@ -117,7 +117,5 @@ jobs:
 
 
             <b>Target Server:</b> ${{ secrets.SERVER_IP }}
-            <b>Updated Services:</b> Laravel, React
 
-            <b>Deploy time:</b> {{ steps.deploy.outputs.time | timezone: 'Europe/Moscow' }}
 

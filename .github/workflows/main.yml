@@ -78,18 +78,15 @@ jobs:
             sed -i "s|image: .*react.*|image: ghcr.io/$REPO_NAME/react:$GITHUB_SHA-react|" docker-compose.yml
             docker-compose up -d
 
-            # Проверка существования .env файла
             if [ ! -f .env ]; then
               echo "Создание нового .env файла..."
-              docker run --rm ghcr.io/$REPO_NAME/laravel:$GITHUB_SHA-laravel cp .env.example .env
-              docker-compose up -d
+              docker run --rm ghcr.io/$REPO_NAME/laravel:$GITHUB_SHA-laravel cat .env.example > .env
               docker-compose exec -T laravel php artisan key:generate
               docker-compose exec -T laravel php artisan config:cache
             else
               echo "Обновление существующего проекта..."
             fi
             
-            # Запуск миграций, если указано
             if [ "$RUN_MIGRATIONS" = "true" ]; then
               echo "Запуск миграций..."
               docker-compose exec -T laravel php artisan migrate --force
@@ -97,11 +94,18 @@ jobs:
               echo "Пропуск миграций."
             fi
 
-            # Получение версий Laravel и Node.js
-            LARAVEL_VERSION=$(docker-compose exec -T laravel php artisan --version | awk '{print $3}')
-            NODE_VERSION=$(docker-compose exec -T react node --version)
-            echo "LARAVEL_VERSION=$LARAVEL_VERSION" >> $GITHUB_ENV
-            echo "NODE_VERSION=$NODE_VERSION" >> $GITHUB_ENV
+            echo "LARAVEL_VERSION=$(docker-compose exec -T laravel php artisan --version | awk '{print $3}')" >> versions.env
+            echo "NODE_VERSION=$(docker-compose exec -T react node --version)" >> versions.env
+
+      - name: Get versions
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            cd /root/laravel-react-docker
+            cat versions.env >> $GITHUB_OUTPUT
 
       - name: Get deploy time
         id: deploy_time
@@ -127,7 +131,7 @@ jobs:
 
             <b>Deploy time:</b> ${{ steps.deploy_time.outputs.time }}
 
-            <b>Laravel Version:</b> ${{ env.LARAVEL_VERSION }}
-            <b>Node.js Version:</b> ${{ env.NODE_VERSION }}
+            <b>Laravel Version:</b> ${{ steps.get_versions.outputs.LARAVEL_VERSION }}
+            <b>Node.js Version:</b> ${{ steps.get_versions.outputs.NODE_VERSION }}
 
             <b>Environment:</b> test

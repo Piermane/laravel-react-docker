@@ -3,8 +3,8 @@ FROM node:18-alpine
 # Установка рабочей директории
 WORKDIR /app
 
-# Копируем все файлы проекта, включая package.json и папку src
-COPY ./react-frontend /app
+# Копируем все файлы проекта из текущей директории (контекст уже настроен на react-frontend)
+COPY . .
 
 # Устанавливаем зависимости и собираем проект
 RUN if [ -f package.json ]; then \

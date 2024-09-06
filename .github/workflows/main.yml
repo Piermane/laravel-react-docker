@@ -16,10 +16,16 @@ jobs:
     steps:
       - name: Get deploy start time
         id: deploy_start
-        run: echo "time=$(date)" >> $GITHUB_ENV
+        run: echo "::set-output name=time::$(date)"
       - name: Get deploy end time
         id: deploy_end
-        run: echo "time=$(date)" >> $GITHUB_ENV
+        run: echo "::set-output name=time::$(date)"
+      - name: Get Laravel Version
+        run: |
+          echo "LARAVEL_VERSION=$(docker-compose exec laravel php artisan --version | awk '{print $3}')" >> $GITHUB_ENV
+      - name: Get Node.js Version
+        run: |
+          echo "NODE_VERSION=$(docker-compose exec react node --version)" >> $GITHUB_ENV
       - name: Checkout code
         uses: actions/checkout@v3
       - name: Set repository name to lowercase
@@ -38,7 +44,7 @@ jobs:
           file: ./laravel-api/Dockerfile
           push: true
           tags: ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}-laravel
-          cache-from: type=registry,ref=ghcr.io/${{ env.REPO_NAME }}/laravel:latest
+          #cache-from: type=registry,ref=ghcr.io/${{ env.REPO_NAME }}/laravel:latest
           cache-to: type=inline
           no-cache: true
       - name: Build and push React Docker image
@@ -48,7 +54,7 @@ jobs:
           file: ./react-frontend/Dockerfile
           push: true
           tags: ghcr.io/${{ env.REPO_NAME }}/react:${{ github.sha }}-react
-          cache-from: type=registry,ref=ghcr.io/${{ env.REPO_NAME }}/react:latest
+          #cache-from: type=registry,ref=ghcr.io/${{ env.REPO_NAME }}/react:latest
           cache-to: type=inline
           no-cache: true
       - name: Copy files to server
@@ -104,18 +110,21 @@ jobs:
           to: ${{ secrets.TELEGRAM_CHAT_ID }}
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           message: |
-            Deployment finished!
-            Status: ${{ job.status }}
-            Project: ${{ github.repository }}
-            Branch: ${{ github.ref }}
-            Commit: ${{ github.sha }}
-            Deployed by: ${{ github.actor }}
-            Migrations run: ${{ github.event.inputs.run_migrations }}
-            Target Server: ${{ secrets.SERVER_IP }}
-            Updated Services: Laravel, React
-            Start time: ${{ steps.deploy_start.outputs.time }}
-            End time: ${{ steps.deploy_end.outputs.time }}
-            Laravel Version: 8.x
-            Node.js Version: 18.x
-            Environment: test
+            🟢**Deployment finished!**
+            **Status:** ${{ job.status }}
+            **Project:** ${{ github.repository }}
+            **Branch:** ${{ github.ref }}
+            **Commit:** ${{ github.sha }}
+            **Deployed by:** ${{ github.actor }}
 
+            **Migrations run:** ${{ github.event.inputs.run_migrations }}
+            **Target Server:** ${{ secrets.SERVER_IP }}
+            **Updated Services:** Laravel, React
+
+            **Start time:** ${{ steps.deploy_start.outputs.time }}
+            **End time:** ${{ steps.deploy_end.outputs.time }}
+
+            **Laravel Version:** ${{ env.LARAVEL_VERSION }}
+            **Node.js Version:** ${{ env.NODE_VERSION }}
+
+            **Environment:** test

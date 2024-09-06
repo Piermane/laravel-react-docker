@@ -3,11 +3,11 @@ FROM node:18-alpine
 # Установка рабочей директории
 WORKDIR /app
 
-# Копирование package.json и package-lock.json
+# Копирование package.json и package-lock.json (если есть)
 COPY package*.json ./
 
 # Установка зависимостей
-RUN npm ci
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 # Копирование файлов приложения
 COPY . .

@@ -10,6 +10,7 @@ on:
         required: true
         type: boolean
         default: false
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -35,8 +36,6 @@ jobs:
           file: ./laravel-api/Dockerfile
           push: true
           tags: ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}-laravel
-          cache-to: type=inline
-          no-cache: true
 
       - name: Build and push React Docker image
         uses: docker/build-push-action@v4
@@ -45,8 +44,6 @@ jobs:
           file: ./react-frontend/Dockerfile
           push: true
           tags: ghcr.io/${{ env.REPO_NAME }}/react:${{ github.sha }}-react
-          cache-to: type=inline
-          no-cache: true
 
       - name: Copy files to server
         uses: appleboy/scp-action@master
@@ -54,11 +51,10 @@ jobs:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
-          source: "docker-compose.yml,nginx.conf,laravel-api"
+          source: "docker-compose.yml,nginx.conf,laravel-api,react-frontend"
           target: "/root/laravel-react-docker"
 
       - name: Deploy to Server
-        id: deploy
         uses: appleboy/ssh-action@master
         env:
           LARAVEL_IMAGE: ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}-laravel
@@ -76,22 +72,16 @@ jobs:
             docker pull $REACT_IMAGE
             docker-compose down
             docker-compose up -d
-
-            if [ ! -f .env ]; then
-              echo "Создание нового .env файла..."
-              docker run --rm $LARAVEL_IMAGE cat .env.example > .env
-              docker-compose exec -T laravel php artisan key:generate
-              docker-compose exec -T laravel php artisan config:cache
-            else
-              echo "Обновление существующего проекта..."
-            fi
-            
             if [ "$RUN_MIGRATIONS" = "true" ]; then
               echo "Запуск миграций..."
               docker-compose exec -T laravel php artisan migrate --force
             else
               echo "Пропуск миграций."
             fi
+            docker-compose exec -T laravel composer install --no-interaction --prefer-dist --optimize-autoloader
+            docker-compose exec -T laravel php artisan config:cache
+            docker-compose exec -T laravel php artisan route:cache
+            docker-compose exec -T laravel php artisan view:cache
 
       - name: Send Telegram Notification
         if: always()

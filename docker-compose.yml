@@ -1,5 +1,4 @@
 version: '3.8'
-
 services:
   nginx:
     image: nginx:stable-alpine
@@ -14,13 +13,14 @@ services:
 
   laravel:
     image: ${LARAVEL_IMAGE}
-    ports:
-      - "8000:8000"
     volumes:
       - ./laravel-api:/var/www/html
-
+    environment:
+      - APP_ENV=production
+      - APP_DEBUG=false
 
   react:
     image: ${REACT_IMAGE}
-    ports:
-      - "3000:3000"
+
+volumes:
+  mysql_data:

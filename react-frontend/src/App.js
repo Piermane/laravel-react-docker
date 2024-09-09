@@ -68,6 +68,12 @@ function App() {
           </li>
         ))}
       </ul>
+
+      <div style={{ marginTop: '20px' }}>
+        <h2>Documents</h2>
+        <a href="/pdf/rules.pdf" target="_blank">Rules</a><br/>
+        <a href="/pdf/prize.pdf" target="_blank">Prize</a>
+      </div>
     </div>
   );
 }

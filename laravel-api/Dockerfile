@@ -13,19 +13,17 @@ RUN apt-get update && apt-get install -y \
 # Очистка кеша
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Установка расширений PHP
+# Установка PHP расширений
 RUN docker-php-ext-install pdo pdo_mysql mbstring exif pcntl bcmath gd
 
-# Получение последней версии Composer
+# Установка Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Установка рабочей директории
-WORKDIR /var/www/html
-
 # Копирование файлов проекта
+WORKDIR /var/www/html
 COPY . /var/www/html
 
-# Установка зависимостей или создание нового проекта
+# Установка зависимостей
 RUN if [ -f "composer.json" ]; then \
         composer install --no-interaction --prefer-dist --optimize-autoloader; \
     else \
@@ -37,6 +35,8 @@ RUN if [ -f "composer.json" ]; then \
 # Установка прав доступа
 RUN chown -R www-data:www-data storage bootstrap/cache
 
-# Открытие порта 9000 и запуск php-fpm сервера
+# Открытие порта 9000 и запуск php-fpm сервера и artisan serve
 EXPOSE 9000
-CMD ["php-fpm"]
+
+# Запуск двух процессов
+CMD php-fpm & php artisan serve --host=0.0.0.0 --port=8000

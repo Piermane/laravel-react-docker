@@ -55,6 +55,10 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+
+      - name: Login to GitHub Container Registry for Trivy
+        run: echo "${{ secrets.MY_GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ secrets.MY_GITHUB_USERNAME }} --password-stdin
+
       - name: Run Trivy vulnerability scanner for Laravel
         id: trivy_laravel
         uses: aquasecurity/trivy-action@master

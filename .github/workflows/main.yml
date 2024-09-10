@@ -1,8 +1,5 @@
-name: CI/CD
+name: last_version
 on:
-  # push:
-  #   branches:
-  #     - main
   workflow_dispatch:
     inputs:
       run_migrations:
@@ -71,17 +68,30 @@ jobs:
             docker pull $LARAVEL_IMAGE
             docker pull $REACT_IMAGE
             docker-compose down
+            
+            # Создание .env файла из секрета
+            echo "${{ secrets.LARAVEL_ENV }}" > laravel-api/.env
+            
             docker-compose up -d
+            
+            # Установка правильных прав на storage
+            docker-compose exec -T laravel chown -R www-data:www-data /var/www/html/storage
+            
             if [ "$RUN_MIGRATIONS" = "true" ]; then
               echo "Запуск миграций..."
               docker-compose exec -T laravel php artisan migrate --force
             else
               echo "Пропуск миграций."
             fi
-            docker-compose exec -T laravel composer install --no-interaction --prefer-dist --optimize-autoloader
-            docker-compose exec -T laravel php artisan config:cache
+            
+            # Очистка кэша
+            docker-compose exec -T laravel php artisan config:clear
+            docker-compose exec -T laravel php artisan cache:clear
             docker-compose exec -T laravel php artisan route:cache
             docker-compose exec -T laravel php artisan view:cache
+            
+            # Оптимизация автозагрузки
+            docker-compose exec -T laravel composer dump-autoload --optimize
 
       - name: Send Telegram Notification
         if: always()

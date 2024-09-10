@@ -43,7 +43,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Output image tag
-        run: echo "Image tag is: ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}"
+        run: echo "Image tag is: ghcr.io/$REPO_NAME/laravel:$GITHUB_SHA"
 
       - name: Check image existence
         run: docker pull ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}

@@ -42,21 +42,16 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Build and push React Docker image
-        id: build_react
-        uses: docker/build-push-action@v5
-        with:
-          context: ./react-frontend
-          file: ./react-frontend/Dockerfile
-          push: true
-          tags: |
-            ghcr.io/${{ env.REPO_NAME }}/react:${{ github.sha }}
-            ghcr.io/${{ env.REPO_NAME }}/react:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Output image tag
+        run: echo "Image tag is: ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}"
+
+      - name: Check image existence
+        run: docker pull ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}
 
       - name: Login to GitHub Container Registry for Trivy
-        run: echo "${{ secrets.MY_GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ secrets.MY_GITHUB_USERNAME }} --password-stdin
+        run: |
+          echo "${{ secrets.MY_GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ secrets.MY_GITHUB_USERNAME }} --password-stdin
+          docker info
 
       - name: Run Trivy vulnerability scanner for Laravel
         uses: aquasecurity/trivy-action@master

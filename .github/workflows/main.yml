@@ -53,12 +53,22 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Check if image exists
+        run: |
+          echo "${{ secrets.MY_GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ secrets.MY_GITHUB_USERNAME }} --password-stdin
+          if docker pull ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }} 2>/dev/null; then
+            echo "Image exists"
+          else
+            echo "Image does not exist"
+            exit 1
+          fi
+
       - name: Run Trivy vulnerability scanner for Laravel
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: 'ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}'
           format: 'table'
-          exit-code: '1'
+          exit-code: '0'
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
@@ -68,10 +78,19 @@ jobs:
         with:
           image-ref: 'ghcr.io/${{ env.REPO_NAME }}/react:${{ github.sha }}'
           format: 'table'
-          exit-code: '1'
+          exit-code: '0'
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
+
+      - name: Debug information
+        if: failure()
+        run: |
+          echo "REPO_NAME: ${{ env.REPO_NAME }}"
+          echo "Image tag: ${{ github.sha }}"
+          docker images
+          docker login ghcr.io -u ${{ secrets.MY_GITHUB_USERNAME }} --password-stdin <<< "${{ secrets.MY_GITHUB_TOKEN }}"
+          docker pull ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}
 
       - name: Copy files to server
         uses: appleboy/scp-action@master

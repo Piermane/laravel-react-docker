@@ -53,15 +53,17 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Check if image exists
+      - name: Check images
         run: |
-          echo "${{ secrets.MY_GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ secrets.MY_GITHUB_USERNAME }} --password-stdin
-          if docker pull ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }} 2>/dev/null; then
-            echo "Image exists"
-          else
-            echo "Image does not exist"
-            exit 1
-          fi
+          echo "Checking for Laravel image:"
+          docker pull ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}
+          echo "Checking for React image:"
+          docker pull ghcr.io/${{ env.REPO_NAME }}/react:${{ github.sha }}
+          echo "List of images:"
+          docker images
+
+      - name: Login to GitHub Container Registry for Trivy
+        run: echo "${{ secrets.MY_GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ secrets.MY_GITHUB_USERNAME }} --password-stdin
 
       - name: Run Trivy vulnerability scanner for Laravel
         uses: aquasecurity/trivy-action@master
@@ -82,15 +84,6 @@ jobs:
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
-
-      - name: Debug information
-        if: failure()
-        run: |
-          echo "REPO_NAME: ${{ env.REPO_NAME }}"
-          echo "Image tag: ${{ github.sha }}"
-          docker images
-          docker login ghcr.io -u ${{ secrets.MY_GITHUB_USERNAME }} --password-stdin <<< "${{ secrets.MY_GITHUB_TOKEN }}"
-          docker pull ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}
 
       - name: Copy files to server
         uses: appleboy/scp-action@master
@@ -115,41 +108,60 @@ jobs:
           envs: LARAVEL_IMAGE,REACT_IMAGE,RUN_MIGRATIONS
           script: |
             set -e
+            echo "Starting deployment process..."
             cd /root/laravel-react-docker
+            echo "Logging into GitHub Container Registry..."
             echo "${{ secrets.MY_GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ secrets.MY_GITHUB_USERNAME }} --password-stdin
-            docker pull $LARAVEL_IMAGE
-            docker pull $REACT_IMAGE
+            echo "Pulling Docker images..."
+            docker pull $LARAVEL_IMAGE || { echo "Failed to pull Laravel image"; exit 1; }
+            docker pull $REACT_IMAGE || { echo "Failed to pull React image"; exit 1; }
+            echo "Stopping existing containers..."
             docker-compose down
-            
+            echo "Creating .env file..."
             echo "${{ secrets.LARAVEL_ENV }}" > laravel-api/.env
-            
-            docker-compose up -d
-            
+            echo "Starting new containers..."
+            docker-compose up -d || { echo "Failed to start containers"; exit 1; }
+            echo "Setting permissions..."
             docker-compose exec -T laravel chown -R www-data:www-data /var/www/html/storage
-            
             if [ "$RUN_MIGRATIONS" = "true" ]; then
-              echo "Запуск миграций..."
-              docker-compose exec -T laravel php artisan migrate --force
+              echo "Running migrations..."
+              docker-compose exec -T laravel php artisan migrate --force || { echo "Migration failed"; exit 1; }
             else
-              echo "Пропуск миграций."
+              echo "Skipping migrations."
             fi
-            
+            echo "Clearing caches..."
             docker-compose exec -T laravel php artisan config:clear
             docker-compose exec -T laravel php artisan cache:clear
             docker-compose exec -T laravel php artisan route:cache
             docker-compose exec -T laravel php artisan view:cache
-            
+            echo "Optimizing autoloader..."
             docker-compose exec -T laravel composer dump-autoload --optimize
-            
+            echo "Cleaning up old images..."
             docker image prune -af
-            
-            echo "Deployment log:"
-            docker-compose logs --tail=100
+            echo "Deployment completed successfully!"
+
+      - name: Collect Logs
+        if: failure()
+        run: |
+          echo "Collecting deployment logs..."
+          mkdir -p deployment_logs
+          docker-compose logs > deployment_logs/docker-compose.log
+          docker ps -a > deployment_logs/docker-ps.log
+          docker images > deployment_logs/docker-images.log
+          echo "Logs collected."
+
+      - name: Upload Logs
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: deployment-logs
+          path: deployment_logs
 
       - name: Send Telegram Notification
         if: always()
         env:
           DEPLOY_STEP_OUTCOME: ${{ steps.deploy.outcome }}
+          DEPLOY_STEP_CONCLUSION: ${{ steps.deploy.conclusion }}
         uses: appleboy/telegram-action@master
         with:
           to: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -163,4 +175,5 @@ jobs:
             <b>Commit:</b> ${{ github.sha }}
             <b>Deployed by:</b> ${{ github.actor }}
             <b>Target Server:</b> ${{ secrets.SERVER_IP }}
-            ${{ job.status != 'success' && format('<b>Error Details:</b>\n- Deploy step: {0}', env.DEPLOY_STEP_OUTCOME) || '' }}
+            ${{ job.status != 'success' && format('<b>Error Details:</b>\n- Deploy step: {0}\n- Conclusion: {1}\n\nPlease check the GitHub Actions logs for more details.', env.DEPLOY_STEP_OUTCOME, env.DEPLOY_STEP_CONCLUSION) || '' }}
+            ${{ job.status != 'success' && '\n\nDeployment logs have been uploaded as artifacts for further investigation.' || '' }}

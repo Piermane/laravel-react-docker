@@ -26,62 +26,52 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ secrets.MY_GITHUB_USERNAME }}
+          password: ${{ secrets.MY_GITHUB_TOKEN }}
 
-      - name: Build Laravel Docker image
+      - name: Build and push Laravel Docker image
         uses: docker/build-push-action@v5
         with:
           context: ./laravel-api
           file: ./laravel-api/Dockerfile
-          push: false
-          load: true
-          tags: ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}
+          push: true
+          tags: |
+            ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}
+            ghcr.io/${{ env.REPO_NAME }}/laravel:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Build React Docker image
+      - name: Build and push React Docker image
         uses: docker/build-push-action@v5
         with:
           context: ./react-frontend
           file: ./react-frontend/Dockerfile
-          push: false
-          load: true
-          tags: ghcr.io/${{ env.REPO_NAME }}/react:${{ github.sha }}
+          push: true
+          tags: |
+            ghcr.io/${{ env.REPO_NAME }}/react:${{ github.sha }}
+            ghcr.io/${{ env.REPO_NAME }}/react:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Scan Laravel image for vulnerabilities
+      - name: Run Trivy vulnerability scanner for Laravel
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: 'ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}'
-          format: 'sarif'
-          output: 'trivy-results-laravel.sarif'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
 
-      - name: Scan React image for vulnerabilities
+      - name: Run Trivy vulnerability scanner for React
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: 'ghcr.io/${{ env.REPO_NAME }}/react:${{ github.sha }}'
-          format: 'sarif'
-          output: 'trivy-results-react.sarif'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
-
-      - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v2
-        if: always()
-        with:
-          sarif_file: 'trivy-results-*.sarif'
-
-      - name: Push images to GitHub Container Registry
-        if: success()
-        run: |
-          docker push ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}
-          docker push ghcr.io/${{ env.REPO_NAME }}/react:${{ github.sha }}
-          docker tag ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }} ghcr.io/${{ env.REPO_NAME }}/laravel:latest
-          docker tag ghcr.io/${{ env.REPO_NAME }}/react:${{ github.sha }} ghcr.io/${{ env.REPO_NAME }}/react:latest
-          docker push ghcr.io/${{ env.REPO_NAME }}/laravel:latest
-          docker push ghcr.io/${{ env.REPO_NAME }}/react:latest
 
       - name: Copy files to server
         uses: appleboy/scp-action@master
@@ -105,8 +95,9 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           envs: LARAVEL_IMAGE,REACT_IMAGE,RUN_MIGRATIONS
           script: |
+            set -e
             cd /root/laravel-react-docker
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            echo "${{ secrets.MY_GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ secrets.MY_GITHUB_USERNAME }} --password-stdin
             docker pull $LARAVEL_IMAGE
             docker pull $REACT_IMAGE
             docker-compose down
@@ -154,4 +145,3 @@ jobs:
             <b>Deployed by:</b> ${{ github.actor }}
             <b>Target Server:</b> ${{ secrets.SERVER_IP }}
             ${{ job.status != 'success' && format('<b>Error Details:</b>\n- Deploy step: {0}', env.DEPLOY_STEP_OUTCOME) || '' }}
-

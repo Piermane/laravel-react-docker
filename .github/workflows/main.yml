@@ -1,4 +1,4 @@
-name: CI/CD
+name: last_version
 on:
   workflow_dispatch:
     inputs:
@@ -53,7 +53,11 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Login to GitHub Container Registry for Trivy
+        run: echo "${{ secrets.MY_GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ secrets.MY_GITHUB_USERNAME }} --password-stdin
+
       - name: Scan Laravel image for vulnerabilities
+        id: scan_laravel
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: 'ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}'
@@ -64,6 +68,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Scan React image for vulnerabilities
+        id: scan_react
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: 'ghcr.io/${{ env.REPO_NAME }}/react:${{ github.sha }}'
@@ -83,6 +88,7 @@ jobs:
           target: "/root/laravel-react-docker"
 
       - name: Deploy to Server
+        id: deploy
         uses: appleboy/ssh-action@master
         env:
           LARAVEL_IMAGE: ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}
@@ -126,9 +132,17 @@ jobs:
             
             # Очистка неиспользуемых образов
             docker image prune -af
+            
+            # Вывод логов
+            echo "Deployment log:"
+            docker-compose logs --tail=100
 
       - name: Send Telegram Notification
         if: always()
+        env:
+          DEPLOY_STEP_OUTCOME: ${{ steps.deploy.outcome }}
+          SCAN_LARAVEL_OUTCOME: ${{ steps.scan_laravel.outcome }}
+          SCAN_REACT_OUTCOME: ${{ steps.scan_react.outcome }}
         uses: appleboy/telegram-action@master
         with:
           to: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -142,4 +156,4 @@ jobs:
             <b>Commit:</b> ${{ github.sha }}
             <b>Deployed by:</b> ${{ github.actor }}
             <b>Target Server:</b> ${{ secrets.SERVER_IP }}
-            ${{ job.status != 'success' && format('<b>Error:</b> {0}', job.steps[job.status == 'failure' && 'Deploy to Server' || 'Send Telegram Notification'].outcome) || '' }}
+            ${{ job.status != 'success' && format('<b>Error Details:</b>\n- Deploy step: {0}\n- Laravel scan: {1}\n- React scan: {2}', env.DEPLOY_STEP_OUTCOME, env.SCAN_LARAVEL_OUTCOME, env.SCAN_REACT_OUTCOME) || '' }}

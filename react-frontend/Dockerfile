@@ -1,18 +1,20 @@
-FROM node:18-alpine
-
-# Установка рабочей директории
+FROM node:18-alpine AS builder
 WORKDIR /app
 
-# Копируем все файлы проекта из текущей директории (контекст уже настроен на react-frontend)
+# Копирование файлов package.json и package-lock.json (если есть)
+COPY package*.json ./
+
+# Установка зависимостей
+RUN npm ci
+
+# Копирование остальных файлов проекта
 COPY . .
 
-# Устанавливаем зависимости и собираем проект
-RUN if [ -f package.json ]; then \
-        npm install && npm run build; \
-    else \
-        echo "package.json не найден. Пропускаем установку."; \
-    fi
+# Сборка проекта
+RUN npm run build
 
-# Открываем порт и запускаем приложение
-EXPOSE 3000
-CMD ["npm", "start"]
+# Финальный этап
+FROM nginx:alpine
+COPY --from=builder /app/build /usr/share/nginx/html
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

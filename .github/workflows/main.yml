@@ -1,8 +1,5 @@
 name: CI/CD
 on:
-  # push:
-  #   branches:
-  #     - main
   workflow_dispatch:
     inputs:
       run_migrations:
@@ -10,43 +7,83 @@ on:
         required: true
         type: boolean
         default: false
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set repository name to lowercase
         id: vars
         run: echo "REPO_NAME=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ secrets.MY_GITHUB_USERNAME }}
           password: ${{ secrets.MY_GITHUB_TOKEN }}
 
       - name: Build and push Laravel Docker image
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           context: ./laravel-api
           file: ./laravel-api/Dockerfile
           push: true
-          tags: ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}-laravel
-          cache-to: type=inline
-          no-cache: true
+          tags: |
+            ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}
+            ghcr.io/${{ env.REPO_NAME }}/laravel:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Build and push React Docker image
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           context: ./react-frontend
           file: ./react-frontend/Dockerfile
           push: true
-          tags: ghcr.io/${{ env.REPO_NAME }}/react:${{ github.sha }}-react
-          cache-to: type=inline
-          no-cache: true
+          tags: |
+            ghcr.io/${{ env.REPO_NAME }}/react:${{ github.sha }}
+            ghcr.io/${{ env.REPO_NAME }}/react:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Check images
+        run: |
+          echo "Checking for Laravel image:"
+          docker pull ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}
+          echo "Checking for React image:"
+          docker pull ghcr.io/${{ env.REPO_NAME }}/react:${{ github.sha }}
+          echo "List of images:"
+          docker images
+
+      - name: Login to GitHub Container Registry for Trivy
+        run: echo "${{ secrets.MY_GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ secrets.MY_GITHUB_USERNAME }} --password-stdin
+
+      - name: Run Trivy vulnerability scanner for Laravel
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Run Trivy vulnerability scanner for React
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'ghcr.io/${{ env.REPO_NAME }}/react:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
 
       - name: Copy files to server
         uses: appleboy/scp-action@master
@@ -54,15 +91,15 @@ jobs:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
-          source: "docker-compose.yml,nginx.conf,laravel-api"
+          source: "docker-compose.yml,nginx.conf,laravel-api,react-frontend"
           target: "/root/laravel-react-docker"
 
       - name: Deploy to Server
         id: deploy
         uses: appleboy/ssh-action@master
         env:
-          LARAVEL_IMAGE: ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}-laravel
-          REACT_IMAGE: ghcr.io/${{ env.REPO_NAME }}/react:${{ github.sha }}-react
+          LARAVEL_IMAGE: ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}
+          REACT_IMAGE: ghcr.io/${{ env.REPO_NAME }}/react:${{ github.sha }}
           RUN_MIGRATIONS: ${{ github.event.inputs.run_migrations }}
         with:
           host: ${{ secrets.SERVER_IP }}
@@ -70,28 +107,38 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           envs: LARAVEL_IMAGE,REACT_IMAGE,RUN_MIGRATIONS
           script: |
+            set -e
+            echo "Starting deployment process..."
             cd /root/laravel-react-docker
+            echo "Logging into GitHub Container Registry..."
             echo "${{ secrets.MY_GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ secrets.MY_GITHUB_USERNAME }} --password-stdin
-            docker pull $LARAVEL_IMAGE
-            docker pull $REACT_IMAGE
+            echo "Pulling Docker images..."
+            docker pull $LARAVEL_IMAGE || { echo "Failed to pull Laravel image"; exit 1; }
+            docker pull $REACT_IMAGE || { echo "Failed to pull React image"; exit 1; }
+            echo "Stopping existing containers..."
             docker-compose down
-            docker-compose up -d
-
-            if [ ! -f .env ]; then
-              echo "Создание нового .env файла..."
-              docker run --rm $LARAVEL_IMAGE cat .env.example > .env
-              docker-compose exec -T laravel php artisan key:generate
-              docker-compose exec -T laravel php artisan config:cache
-            else
-              echo "Обновление существующего проекта..."
-            fi
-            
+            echo "Creating .env file..."
+            echo "${{ secrets.LARAVEL_ENV }}" > laravel-api/.env
+            echo "Starting new containers..."
+            docker-compose up -d || { echo "Failed to start containers"; exit 1; }
+            echo "Setting permissions..."
+            docker-compose exec -T laravel chown -R www-data:www-data /var/www/html/storage
             if [ "$RUN_MIGRATIONS" = "true" ]; then
-              echo "Запуск миграций..."
-              docker-compose exec -T laravel php artisan migrate --force
+              echo "Running migrations..."
+              docker-compose exec -T laravel php artisan migrate --force || { echo "Migration failed"; exit 1; }
             else
-              echo "Пропуск миграций."
+              echo "Skipping migrations."
             fi
+            echo "Clearing caches..."
+            docker-compose exec -T laravel php artisan config:clear
+            docker-compose exec -T laravel php artisan cache:clear
+            docker-compose exec -T laravel php artisan route:cache
+            docker-compose exec -T laravel php artisan view:cache
+            echo "Optimizing autoloader..."
+            docker-compose exec -T laravel composer dump-autoload --optimize
+            echo "Cleaning up old images..."
+            docker image prune -af
+            echo "Deployment completed successfully!"
 
       - name: Send Telegram Notification
         if: always()

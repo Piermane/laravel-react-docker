@@ -5,8 +5,8 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf
-      - ./laravel-api/public:/var/www/html/public
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - laravel_public:/var/www/html/public
     depends_on:
       - laravel
       - react
@@ -15,10 +15,12 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
   laravel:
     image: ${LARAVEL_IMAGE}
     volumes:
-      - ./laravel-api:/var/www/html
+      - laravel_storage:/var/www/html/storage
+      - ./laravel-api:/var/www/html:ro
     environment:
       - APP_ENV=production
       - APP_DEBUG=false
@@ -29,6 +31,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
   react:
     image: ${REACT_IMAGE}
     healthcheck:
@@ -36,3 +39,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+volumes:
+  laravel_public:
+  laravel_storage:

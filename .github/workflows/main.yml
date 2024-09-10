@@ -1,4 +1,4 @@
-name: test_last_version
+name: CI/CD
 on:
   workflow_dispatch:
     inputs:
@@ -55,12 +55,10 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-
       - name: Login to GitHub Container Registry for Trivy
         run: echo "${{ secrets.MY_GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ secrets.MY_GITHUB_USERNAME }} --password-stdin
 
       - name: Run Trivy vulnerability scanner for Laravel
-        id: trivy_laravel
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: 'ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}'
@@ -71,7 +69,6 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Run Trivy vulnerability scanner for React
-        id: trivy_react
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: 'ghcr.io/${{ env.REPO_NAME }}/react:${{ github.sha }}'

@@ -53,6 +53,15 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Check images
+        run: |
+          echo "Checking for Laravel image:"
+          docker pull ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}
+          echo "Checking for React image:"
+          docker pull ghcr.io/${{ env.REPO_NAME }}/react:${{ github.sha }}
+          echo "List of images:"
+          docker images
+
       - name: Login to GitHub Container Registry for Trivy
         run: echo "${{ secrets.MY_GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ secrets.MY_GITHUB_USERNAME }} --password-stdin
 
@@ -61,7 +70,7 @@ jobs:
         with:
           image-ref: 'ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}'
           format: 'table'
-          exit-code: '0'
+          exit-code: '1'
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
@@ -71,7 +80,7 @@ jobs:
         with:
           image-ref: 'ghcr.io/${{ env.REPO_NAME }}/react:${{ github.sha }}'
           format: 'table'
-          exit-code: '0'
+          exit-code: '1'
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
@@ -99,23 +108,37 @@ jobs:
           envs: LARAVEL_IMAGE,REACT_IMAGE,RUN_MIGRATIONS
           script: |
             set -e
+            echo "Starting deployment process..."
             cd /root/laravel-react-docker
+            echo "Logging into GitHub Container Registry..."
             echo "${{ secrets.MY_GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ secrets.MY_GITHUB_USERNAME }} --password-stdin
-            docker pull $LARAVEL_IMAGE
-            docker pull $REACT_IMAGE
+            echo "Pulling Docker images..."
+            docker pull $LARAVEL_IMAGE || { echo "Failed to pull Laravel image"; exit 1; }
+            docker pull $REACT_IMAGE || { echo "Failed to pull React image"; exit 1; }
+            echo "Stopping existing containers..."
             docker-compose down
+            echo "Creating .env file..."
             echo "${{ secrets.LARAVEL_ENV }}" > laravel-api/.env
-            docker-compose up -d
+            echo "Starting new containers..."
+            docker-compose up -d || { echo "Failed to start containers"; exit 1; }
+            echo "Setting permissions..."
             docker-compose exec -T laravel chown -R www-data:www-data /var/www/html/storage
             if [ "$RUN_MIGRATIONS" = "true" ]; then
-              docker-compose exec -T laravel php artisan migrate --force
+              echo "Running migrations..."
+              docker-compose exec -T laravel php artisan migrate --force || { echo "Migration failed"; exit 1; }
+            else
+              echo "Skipping migrations."
             fi
+            echo "Clearing caches..."
             docker-compose exec -T laravel php artisan config:clear
             docker-compose exec -T laravel php artisan cache:clear
             docker-compose exec -T laravel php artisan route:cache
             docker-compose exec -T laravel php artisan view:cache
+            echo "Optimizing autoloader..."
             docker-compose exec -T laravel composer dump-autoload --optimize
+            echo "Cleaning up old images..."
             docker image prune -af
+            echo "Deployment completed successfully!"
 
       - name: Send Telegram Notification
         if: always()

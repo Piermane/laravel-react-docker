@@ -1,26 +1,32 @@
-FROM php:8.2-fpm
+FROM php:8.2-fpm-alpine
 
-# Установка зависимостей PHP
-RUN apt-get update && apt-get install -y \
-    git curl libpng-dev libonig-dev libxml2-dev zip unzip \
-    && docker-php-ext-install pdo pdo_mysql mbstring exif pcntl bcmath gd \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+# Установка зависимостей и расширений PHP
+RUN apk add --no-cache \
+    git \
+    curl \
+    libpng-dev \
+    oniguruma-dev \
+    libxml2-dev \
+    zip \
+    unzip \
+    && docker-php-ext-install pdo pdo_mysql mbstring exif pcntl bcmath gd
 
 # Установка Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Рабочая директория
+# Настройка рабочей директории
 WORKDIR /var/www/html
 
-# Копирование файлов Laravel
+# Копирование файлов проекта
 COPY . .
 
-# Установка прав и зависимостей
-RUN composer install --no-dev --optimize-autoloader && \
-    chown -R www-data:www-data /var/www/html
+# Установка зависимостей и оптимизация автозагрузки
+RUN composer install --no-dev --optimize-autoloader \
+    && chown -R www-data:www-data /var/www/html
 
-# Настройка PHP-FPM
+# Копирование конфигурации PHP-FPM
 COPY php-fpm.conf /usr/local/etc/php-fpm.d/www.conf
 
 EXPOSE 9000
+
 CMD ["php-fpm"]

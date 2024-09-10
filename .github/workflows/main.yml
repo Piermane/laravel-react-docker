@@ -1,4 +1,4 @@
-name: CI/CD
+name: test_last_version
 on:
   workflow_dispatch:
     inputs:
@@ -30,6 +30,7 @@ jobs:
           password: ${{ secrets.MY_GITHUB_TOKEN }}
 
       - name: Build and push Laravel Docker image
+        id: build_laravel
         uses: docker/build-push-action@v5
         with:
           context: ./laravel-api
@@ -42,6 +43,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build and push React Docker image
+        id: build_react
         uses: docker/build-push-action@v5
         with:
           context: ./react-frontend
@@ -54,6 +56,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Run Trivy vulnerability scanner for Laravel
+        id: trivy_laravel
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: 'ghcr.io/${{ env.REPO_NAME }}/laravel:${{ github.sha }}'
@@ -64,6 +67,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Run Trivy vulnerability scanner for React
+        id: trivy_react
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: 'ghcr.io/${{ env.REPO_NAME }}/react:${{ github.sha }}'
@@ -74,6 +78,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Copy files to server
+        id: copy_files
         uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.SERVER_IP }}
@@ -144,4 +149,4 @@ jobs:
             <b>Commit:</b> ${{ github.sha }}
             <b>Deployed by:</b> ${{ github.actor }}
             <b>Target Server:</b> ${{ secrets.SERVER_IP }}
-            ${{ job.status != 'success' && format('<b>Error Details:</b>\n- Deploy step: {0}', env.DEPLOY_STEP_OUTCOME) || '' }}
+            ${{ job.status != 'success' && format('<b>Error Details:</b>\n{0}', env.ERROR_MESSAGE) || '' }}
